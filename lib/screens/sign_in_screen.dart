@@ -60,7 +60,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   image: const AssetImage('assets/images/crowd_background.jpg'),
                   fit: BoxFit.cover,
                   colorFilter: ColorFilter.mode(
-                    Colors.black.withOpacity(0.6),
+                    Colors.black.withOpacity(0.1),
                     BlendMode.darken,
                   ),
                   onError: (exception, stackTrace) {
@@ -97,7 +97,7 @@ class _SignInScreenState extends State<SignInScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 24.0),
                         child: Container(
                           decoration: BoxDecoration(
-                            color: AppColors.cardBackground.withOpacity(0.95),
+                            color: AppColors.cardBackground.withOpacity(0.3),
                             borderRadius: BorderRadius.circular(24),
                           ),
                           padding: const EdgeInsets.all(24),
