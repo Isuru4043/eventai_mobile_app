@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiClient {
-  static const _baseUrl = 'https://api.ourtownevent.com/api/';
+  static const _baseUrl = 'https://api.ourtownevent.com/api';
   final Dio dio;
   final FlutterSecureStorage secureStorage;
 

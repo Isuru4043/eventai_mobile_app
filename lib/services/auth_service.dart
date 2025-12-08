@@ -10,68 +10,70 @@ class AuthService {
 
   /// Sign in using credentials. Matches Postman: POST /users/token/
   Future<void> signIn({required String email, required String password}) async {
-    try {
-      print("AUTH → Sending login request...");
+    print("=========== SIGN IN REQUEST ===========");
+    print("Email: $email");
+    print("Endpoint: /users/token/");
+    print("=======================================");
 
+    try {
       final resp = await _apiClient.dio.post(
         '/users/token/',
         data: {'email': email, 'password': password},
         options: Options(contentType: Headers.jsonContentType),
       );
 
-      print("AUTH → Login success. Raw response: ${resp.data}");
+      print("=========== SIGN IN SUCCESS ===========");
+      print("Raw response: ${resp.data}");
+      print("=======================================");
 
       final data = resp.data;
-
-      // Extract tokens (adjust if backend uses other names)
       final access = data['access'] ?? data['access_token'] ?? data['token'];
       final refresh = data['refresh'] ?? data['refresh_token'];
 
       if (access == null) {
-        throw Exception("Auth error: server did not return an access token.");
+        print("ERROR: Access token missing in server response.");
+        throw Exception("Auth error: access token missing");
       }
 
-      print("AUTH → Saving tokens to secure storage...");
       await _storage.write(key: 'access_token', value: access);
       if (refresh != null) {
         await _storage.write(key: 'refresh_token', value: refresh);
       }
-
-      print("AUTH → Tokens saved. Login complete.");
     } on DioError catch (e) {
-      print("AUTH → Dio error occurred: ${e.type}");
+      print("=========== DIO ERROR ===========");
+      print("Type: ${e.type}");
 
-      // If backend returned a response (400, 401, 500, etc.)
       if (e.response != null) {
-        print("AUTH → STATUS: ${e.response!.statusCode}");
-        print("AUTH → RESPONSE DATA: ${e.response!.data}");
+        print("STATUS CODE: ${e.response!.statusCode}");
+        print("RESPONSE DATA: ${e.response!.data}");
+        print("FULL RESPONSE: ${e.response}");
 
         final status = e.response!.statusCode!;
         final body = e.response!.data;
 
-        // Extract server error message if exists
-        String serverMsg = "Login failed";
+        String serverMsg = "Unknown server error";
         if (body is Map && body['detail'] != null) {
           serverMsg = body['detail'];
-        } else if (body.toString().isNotEmpty) {
-          serverMsg = body.toString();
+        } else if (body is String) {
+          serverMsg = body;
         }
 
-        // Common login errors
-        if (status == 400 || status == 401) {
-          throw Exception(serverMsg);
-        }
+        print("SERVER MESSAGE: $serverMsg");
+        print("=================================");
 
         throw Exception("Server error ($status): $serverMsg");
       }
 
-      // No response at all → network issue
-      throw Exception(
-        "Network error: Could not reach server. (${e.type}) ${e.message}",
-      );
+      print("NO RESPONSE FROM SERVER");
+      print("Message: ${e.message}");
+      print("=================================");
+
+      throw Exception("Network error: ${e.message}");
     } catch (e) {
-      // Any other unexpected error
-      print("AUTH → Unexpected error: $e");
+      print("=========== UNKNOWN ERROR ===========");
+      print(e.toString());
+      print("======================================");
+
       throw Exception("Unexpected error: $e");
     }
   }
