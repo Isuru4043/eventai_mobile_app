@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../constants/app_constants.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/custom_button.dart';
@@ -22,6 +23,7 @@ class _SignInScreenState extends State<SignInScreen> {
   bool _obscurePassword = true;
 
   bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -34,24 +36,49 @@ class _SignInScreenState extends State<SignInScreen> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Enter email & password')));
+      setState(() {
+        _errorMessage = 'Please enter both email and password';
+      });
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
     try {
-      await authService.signIn(email: email, password: password);
+      // add a timeout so the UI won't remain stuck if the network hangs
+      await authService
+          .signIn(email: email, password: password)
+          .timeout(const Duration(seconds: 10));
+
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = null;
+      });
       // optional: fetch user profile here if endpoint exists
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
       );
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.toString())));
+    } on TimeoutException {
+      if (mounted) {
+        setState(() {
+          _errorMessage =
+              'Request timed out. Please check your connection and try again.';
+        });
+      }
+    } on Exception catch (e) {
+      // use the friendly message from AuthService
+      final userMsg = e.toString().replaceFirst('Exception: ', '');
+
+      if (mounted) {
+        setState(() {
+          _errorMessage = userMsg.isEmpty
+              ? 'Invalid email or password'
+              : userMsg;
+        });
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -135,6 +162,41 @@ class _SignInScreenState extends State<SignInScreen> {
                                 style: AppTextStyles.heading2,
                               ),
                               const SizedBox(height: 32),
+                              if (_errorMessage != null) ...[
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.red.withOpacity(0.5),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(
+                                        Icons.error_outline,
+                                        color: Colors.redAccent,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          _errorMessage!,
+                                          style: const TextStyle(
+                                            color: Colors.redAccent,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                              ],
                               // Email field
                               CustomTextField(
                                 label: 'Email',

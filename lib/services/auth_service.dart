@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'dart:async';
 import 'api_client.dart';
 
 class AuthService {
@@ -39,7 +40,20 @@ class AuthService {
       if (refresh != null) {
         await _storage.write(key: 'refresh_token', value: refresh);
       }
+    } on TimeoutException {
+      throw Exception(
+        "Request timed out. Please check your connection and try again.",
+      );
     } on DioError catch (e) {
+      // Map Dio timeout types to a friendly message
+      if (e.type == DioErrorType.connectionTimeout ||
+          e.type == DioErrorType.receiveTimeout ||
+          e.type == DioErrorType.sendTimeout) {
+        throw Exception(
+          "Request timed out. Please check your connection and try again.",
+        );
+      }
+
       print("=========== DIO ERROR ===========");
       print("Type: ${e.type}");
 
@@ -52,14 +66,34 @@ class AuthService {
         final body = e.response!.data;
 
         String serverMsg = "Unknown server error";
-        if (body is Map && body['detail'] != null) {
-          serverMsg = body['detail'];
-        } else if (body is String) {
+
+        if (body is Map) {
+          // prefer explicit message field
+          if (body['message'] is String &&
+              (body['message'] as String).trim().isNotEmpty) {
+            serverMsg = (body['message'] as String).trim();
+          } else if (body['detail'] is String &&
+              (body['detail'] as String).trim().isNotEmpty) {
+            serverMsg = (body['detail'] as String).trim();
+          } else if (body['errors'] is Map && (body['errors'] as Map).isNotEmpty) {
+            final first = (body['errors'] as Map).values.first;
+            if (first is List && first.isNotEmpty && first.first is String) {
+              serverMsg = (first.first as String).trim();
+            }
+          }
+        } else if (body is String && body.isNotEmpty) {
           serverMsg = body;
         }
 
         print("SERVER MESSAGE: $serverMsg");
         print("=================================");
+
+        // Map common error codes to user-friendly messages
+        if (status == 401 || status == 400) {
+          throw Exception(
+            serverMsg.isNotEmpty ? serverMsg : "Invalid email or password",
+          );
+        }
 
         throw Exception("Server error ($status): $serverMsg");
       }
