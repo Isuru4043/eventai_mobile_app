@@ -6,6 +6,7 @@ import 'sign_up_screen.dart';
 import 'forgot_password_screen.dart';
 import 'main_navigation_screen.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../services/service_locator.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -20,6 +21,8 @@ class _SignInScreenState extends State<SignInScreen> {
   bool _rememberMe = false;
   bool _obscurePassword = true;
 
+  bool _isLoading = false;
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -27,14 +30,30 @@ class _SignInScreenState extends State<SignInScreen> {
     super.dispose();
   }
 
-  void _handleSignIn() {
-    // TODO: Implement actual sign in logic
-    if (_emailController.text.isNotEmpty &&
-        _passwordController.text.isNotEmpty) {
+  void _handleSignIn() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter email & password')));
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await authService.signIn(email: email, password: password);
+      // optional: fetch user profile here if endpoint exists
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
       );
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -144,6 +163,7 @@ class _SignInScreenState extends State<SignInScreen> {
                                   },
                                 ),
                               ),
+
                               const SizedBox(height: 16),
                               // Remember me and Forgot password
                               Row(
@@ -210,8 +230,8 @@ class _SignInScreenState extends State<SignInScreen> {
                               const SizedBox(height: 24),
                               // Sign in button
                               CustomButton(
-                                text: 'Sign In',
-                                onPressed: _handleSignIn,
+                                text: _isLoading ? 'Signing in...' : 'Sign In',
+                                onPressed: _isLoading ? null : _handleSignIn,
                               ),
                               const SizedBox(height: 20),
                               // Don't have account
