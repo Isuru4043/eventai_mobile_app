@@ -75,7 +75,8 @@ class AuthService {
           } else if (body['detail'] is String &&
               (body['detail'] as String).trim().isNotEmpty) {
             serverMsg = (body['detail'] as String).trim();
-          } else if (body['errors'] is Map && (body['errors'] as Map).isNotEmpty) {
+          } else if (body['errors'] is Map &&
+              (body['errors'] as Map).isNotEmpty) {
             final first = (body['errors'] as Map).values.first;
             if (first is List && first.isNotEmpty && first.first is String) {
               serverMsg = (first.first as String).trim();
@@ -127,4 +128,6 @@ class AuthService {
 
     print("AUTH → Signed out successfully.");
   }
+
+  Future<void> signUp() async {}
 }
