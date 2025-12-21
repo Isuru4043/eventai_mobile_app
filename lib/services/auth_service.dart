@@ -129,5 +129,290 @@ class AuthService {
     print("AUTH → Signed out successfully.");
   }
 
-  Future<void> signUp() async {}
+  /// Register user and send OTP code to email
+  Future<void> registerAndSendCode({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    print("=========== REGISTER REQUEST ===========");
+    print("Name: $name");
+    print("Email: $email");
+    print("Endpoint: /users/register/");
+    print("=======================================");
+
+    try {
+      await _apiClient.dio.post(
+        '/users/register/',
+        data: {
+          'name': name,
+          'email': email,
+          'password': password,
+          'country': 'Sri Lanka',
+          'city': 'Colombo',
+        },
+        options: Options(contentType: Headers.jsonContentType),
+      );
+
+      print("=========== REGISTER SUCCESS ===========");
+      print("OTP code sent to email: $email");
+      print("=======================================");
+    } on TimeoutException {
+      throw Exception(
+        "Request timed out. Please check your connection and try again.",
+      );
+    } on DioError catch (e) {
+      if (e.type == DioErrorType.connectionTimeout ||
+          e.type == DioErrorType.receiveTimeout ||
+          e.type == DioErrorType.sendTimeout) {
+        throw Exception(
+          "Request timed out. Please check your connection and try again.",
+        );
+      }
+
+      print("=========== DIO ERROR ===========");
+      print("Type: ${e.type}");
+
+      if (e.response != null) {
+        print("STATUS CODE: ${e.response!.statusCode}");
+        print("RESPONSE DATA: ${e.response!.data}");
+
+        final status = e.response!.statusCode!;
+        final body = e.response!.data;
+
+        String serverMsg = "Unknown server error";
+
+        if (body is Map) {
+          if (body['message'] is String &&
+              (body['message'] as String).trim().isNotEmpty) {
+            serverMsg = (body['message'] as String).trim();
+          } else if (body['detail'] is String &&
+              (body['detail'] as String).trim().isNotEmpty) {
+            serverMsg = (body['detail'] as String).trim();
+          } else if (body['errors'] is Map &&
+              (body['errors'] as Map).isNotEmpty) {
+            final first = (body['errors'] as Map).values.first;
+            if (first is List && first.isNotEmpty && first.first is String) {
+              serverMsg = (first.first as String).trim();
+            }
+          }
+        } else if (body is String && body.isNotEmpty) {
+          serverMsg = body;
+        }
+
+        print("SERVER MESSAGE: $serverMsg");
+        print("=================================");
+
+        if (status == 400 || status == 409) {
+          throw Exception(
+            serverMsg.isNotEmpty ? serverMsg : "Registration failed. Please try again.",
+          );
+        }
+
+        throw Exception("Server error ($status): $serverMsg");
+      }
+
+      print("NO RESPONSE FROM SERVER");
+      print("Message: ${e.message}");
+      print("=================================");
+
+      throw Exception("Network error: ${e.message}");
+    } catch (e) {
+      print("=========== UNKNOWN ERROR ===========");
+      print(e.toString());
+      print("======================================");
+
+      throw Exception("Unexpected error: $e");
+    }
+  }
+
+  /// Verify email OTP code
+  Future<void> verifyEmailCode({
+    required String email,
+    required String code,
+  }) async {
+    print("=========== VERIFY OTP REQUEST ===========");
+    print("Email: $email");
+    print("Code: $code");
+    print("Endpoint: /users/verify_otp/");
+    print("=======================================");
+
+    try {
+      final resp = await _apiClient.dio.post(
+        '/users/verify_otp/',
+        data: {'email': email, 'otp': code},
+        options: Options(contentType: Headers.jsonContentType),
+      );
+
+      print("=========== VERIFY OTP SUCCESS ===========");
+      print("Raw response: ${resp.data}");
+      print("=======================================");
+
+      // Check if response contains tokens (user is automatically signed in after verification)
+      final data = resp.data;
+      if (data is Map) {
+        final access = data['access'] ?? data['access_token'] ?? data['token'];
+        final refresh = data['refresh'] ?? data['refresh_token'];
+
+        if (access != null) {
+          await _storage.write(key: 'access_token', value: access);
+          if (refresh != null) {
+            await _storage.write(key: 'refresh_token', value: refresh);
+          }
+        }
+      }
+    } on TimeoutException {
+      throw Exception(
+        "Request timed out. Please check your connection and try again.",
+      );
+    } on DioError catch (e) {
+      if (e.type == DioErrorType.connectionTimeout ||
+          e.type == DioErrorType.receiveTimeout ||
+          e.type == DioErrorType.sendTimeout) {
+        throw Exception(
+          "Request timed out. Please check your connection and try again.",
+        );
+      }
+
+      print("=========== DIO ERROR ===========");
+      print("Type: ${e.type}");
+
+      if (e.response != null) {
+        print("STATUS CODE: ${e.response!.statusCode}");
+        print("RESPONSE DATA: ${e.response!.data}");
+
+        final status = e.response!.statusCode!;
+        final body = e.response!.data;
+
+        String serverMsg = "Unknown server error";
+
+        if (body is Map) {
+          if (body['message'] is String &&
+              (body['message'] as String).trim().isNotEmpty) {
+            serverMsg = (body['message'] as String).trim();
+          } else if (body['detail'] is String &&
+              (body['detail'] as String).trim().isNotEmpty) {
+            serverMsg = (body['detail'] as String).trim();
+          } else if (body['errors'] is Map &&
+              (body['errors'] as Map).isNotEmpty) {
+            final first = (body['errors'] as Map).values.first;
+            if (first is List && first.isNotEmpty && first.first is String) {
+              serverMsg = (first.first as String).trim();
+            }
+          }
+        } else if (body is String && body.isNotEmpty) {
+          serverMsg = body;
+        }
+
+        print("SERVER MESSAGE: $serverMsg");
+        print("=================================");
+
+        if (status == 400 || status == 401) {
+          throw Exception(
+            serverMsg.isNotEmpty ? serverMsg : "Invalid OTP code. Please try again.",
+          );
+        }
+
+        throw Exception("Server error ($status): $serverMsg");
+      }
+
+      print("NO RESPONSE FROM SERVER");
+      print("Message: ${e.message}");
+      print("=================================");
+
+      throw Exception("Network error: ${e.message}");
+    } catch (e) {
+      print("=========== UNKNOWN ERROR ===========");
+      print(e.toString());
+      print("======================================");
+
+      throw Exception("Unexpected error: $e");
+    }
+  }
+
+  /// Send forgot password email
+  Future<void> forgotPassword({required String email}) async {
+    print("=========== FORGOT PASSWORD REQUEST ===========");
+    print("Email: $email");
+    print("Endpoint: /users/forgot_password_request/");
+    print("=======================================");
+
+    try {
+      await _apiClient.dio.post(
+        '/users/forgot_password_request/',
+        data: {'email': email},
+        options: Options(contentType: Headers.jsonContentType),
+      );
+
+      print("=========== FORGOT PASSWORD SUCCESS ===========");
+      print("Password reset email sent to: $email");
+      print("=======================================");
+    } on TimeoutException {
+      throw Exception(
+        "Request timed out. Please check your connection and try again.",
+      );
+    } on DioError catch (e) {
+      if (e.type == DioErrorType.connectionTimeout ||
+          e.type == DioErrorType.receiveTimeout ||
+          e.type == DioErrorType.sendTimeout) {
+        throw Exception(
+          "Request timed out. Please check your connection and try again.",
+        );
+      }
+
+      print("=========== DIO ERROR ===========");
+      print("Type: ${e.type}");
+
+      if (e.response != null) {
+        print("STATUS CODE: ${e.response!.statusCode}");
+        print("RESPONSE DATA: ${e.response!.data}");
+
+        final status = e.response!.statusCode!;
+        final body = e.response!.data;
+
+        String serverMsg = "Unknown server error";
+
+        if (body is Map) {
+          if (body['message'] is String &&
+              (body['message'] as String).trim().isNotEmpty) {
+            serverMsg = (body['message'] as String).trim();
+          } else if (body['detail'] is String &&
+              (body['detail'] as String).trim().isNotEmpty) {
+            serverMsg = (body['detail'] as String).trim();
+          } else if (body['errors'] is Map &&
+              (body['errors'] as Map).isNotEmpty) {
+            final first = (body['errors'] as Map).values.first;
+            if (first is List && first.isNotEmpty && first.first is String) {
+              serverMsg = (first.first as String).trim();
+            }
+          }
+        } else if (body is String && body.isNotEmpty) {
+          serverMsg = body;
+        }
+
+        print("SERVER MESSAGE: $serverMsg");
+        print("=================================");
+
+        if (status == 400 || status == 404) {
+          throw Exception(
+            serverMsg.isNotEmpty ? serverMsg : "Email not found. Please check your email address.",
+          );
+        }
+
+        throw Exception("Server error ($status): $serverMsg");
+      }
+
+      print("NO RESPONSE FROM SERVER");
+      print("Message: ${e.message}");
+      print("=================================");
+
+      throw Exception("Network error: ${e.message}");
+    } catch (e) {
+      print("=========== UNKNOWN ERROR ===========");
+      print(e.toString());
+      print("======================================");
+
+      throw Exception("Unexpected error: $e");
+    }
+  }
 }

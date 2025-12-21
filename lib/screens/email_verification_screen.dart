@@ -2,12 +2,19 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import '../constants/app_constants.dart';
 import '../widgets/custom_button.dart';
+import '../services/service_locator.dart';
+import 'sign_in_screen.dart';
 import 'create_password_screen.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
   final String email;
+  final bool isForgotPassword;
 
-  const EmailVerificationScreen({super.key, required this.email});
+  const EmailVerificationScreen({
+    super.key,
+    required this.email,
+    this.isForgotPassword = false,
+  });
 
   @override
   State<EmailVerificationScreen> createState() =>
@@ -22,6 +29,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   final List<FocusNode> _focusNodes = List.generate(6, (index) => FocusNode());
   int _resendTimer = 25;
   Timer? _timer;
+  bool _isLoading = false;
+  bool _isVerifying = false;
 
   @override
   void initState() {
@@ -53,21 +62,114 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     });
   }
 
-  void _resendCode() {
+  Future<void> _resendCode() async {
     setState(() {
       _resendTimer = 25;
+      _isLoading = true;
     });
     _startResendTimer();
-    // TODO: Implement resend logic
+
+    try {
+      if (widget.isForgotPassword) {
+        // Resend forgot password email for forgot password flow
+        await authService.forgotPassword(email: widget.email);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Password reset code resent to your email'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        // For sign up flow, resend registration request
+        // Note: This might require the password or a separate resend endpoint
+        // For now, we'll just reset the timer
+        // If your API has a separate resend endpoint, implement it here
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Resend functionality will be implemented'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to resend code: ${e.toString().replaceFirst('Exception: ', '')}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
-  void _handleVerify() {
+  Future<void> _handleVerify() async {
     String code = _controllers.map((controller) => controller.text).join();
-    if (code.length == 6) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const CreatePasswordScreen()),
+    
+    if (code.length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter the complete 6-digit code'),
+          backgroundColor: Colors.red,
+        ),
       );
+      return;
+    }
+
+    setState(() {
+      _isVerifying = true;
+    });
+
+    try {
+      await authService.verifyEmailCode(
+        email: widget.email,
+        code: code,
+      );
+
+      if (mounted) {
+        // Navigate based on flow: sign up -> sign in, forgot password -> create password
+        if (widget.isForgotPassword) {
+          // For forgot password flow, navigate to create password screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const CreatePasswordScreen(),
+            ),
+          );
+        } else {
+          // For sign up flow, navigate to sign in screen
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const SignInScreen()),
+            (route) => false, // Remove all previous routes
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isVerifying = false;
+        });
+      }
     }
   }
 
@@ -181,7 +283,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                               width: double.infinity,
                               height: 56,
                               child: OutlinedButton(
-                                onPressed: _resendTimer == 0
+                                onPressed: (_resendTimer == 0 && !_isLoading && !_isVerifying)
                                     ? _resendCode
                                     : null,
                                 style: OutlinedButton.styleFrom(
@@ -194,9 +296,11 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                                 child: Text(
                                   _resendTimer > 0
                                       ? 'Resend 0:${_resendTimer.toString().padLeft(2, '0')}'
-                                      : 'Resend',
+                                      : _isLoading
+                                          ? 'Resending...'
+                                          : 'Resend',
                                   style: TextStyle(
-                                    color: _resendTimer > 0
+                                    color: (_resendTimer > 0 || _isLoading || _isVerifying)
                                         ? AppColors.textGrey
                                         : Colors.black,
                                     fontSize: 16,
@@ -207,8 +311,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                             ),
                             const SizedBox(height: 16),
                             CustomButton(
-                              text: 'Verify',
-                              onPressed: _handleVerify,
+                              text: _isVerifying ? 'Verifying...' : 'Verify',
+                              onPressed: (_isVerifying || _isLoading) ? null : _handleVerify,
                             ),
                           ],
                         ),
