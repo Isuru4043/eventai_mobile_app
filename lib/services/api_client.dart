@@ -16,6 +16,20 @@ class ApiClient {
     dio.interceptors.add(
       QueuedInterceptorsWrapper(
         onRequest: (options, handler) async {
+          // Endpoints that should NOT include an Authorization header
+          const publicPaths = [
+            '/users/token/', // sign in
+            '/users/register/', // sign up
+            '/users/verify_otp/', // email / OTP verification
+            '/users/forgot_password_request/', // forgot password
+          ];
+
+          // If this is a public auth endpoint, don't attach a token
+          if (publicPaths.any((p) => options.path.startsWith(p))) {
+            return handler.next(options);
+          }
+
+          // For all other endpoints, attach token if available
           final token = await secureStorage.read(key: 'access_token');
           if (token != null) {
             options.headers['Authorization'] = 'Bearer $token';
